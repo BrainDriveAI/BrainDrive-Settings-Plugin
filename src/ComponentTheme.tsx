@@ -7,7 +7,7 @@ import { GearIcon, MoonIcon, SunIcon, ComputerIcon } from './icons';
  * Interface for the Theme service functionality required by this plugin.
  * This keeps the plugin decoupled from the actual service implementation.
  */
-interface ThemeServiceBridge {
+interface ThemeService {
   getCurrentTheme: () => string;
   setTheme: (theme: string) => void;
   toggleTheme: () => void;
@@ -38,7 +38,7 @@ interface ComponentThemeProps {
   moduleId?: string;
   instanceId?: string;
   services?: {
-    theme?: ThemeServiceBridge;
+    theme?: ThemeService;
     settings?: SettingsServiceBridge;
     api?: any;
   };
@@ -76,7 +76,7 @@ class ComponentTheme extends React.Component<ComponentThemeProps, ComponentTheme
     this.state = {
       currentTheme: 'light', // Default theme
       useSystemTheme: false,
-      isLoading: true,
+      isLoading: false, // Start as false to allow theme listener to work immediately
       error: null
     };
     
@@ -87,21 +87,8 @@ class ComponentTheme extends React.Component<ComponentThemeProps, ComponentTheme
   }
   
   async componentDidMount() {
-    console.log('ComponentTheme componentDidMount - initializing...');
-    
-    // Stage 1: Register setting definition
-    const definitionRegistered = await this.registerThemeSettingDefinition();
-    
-    // Stage 2: Initialize theme service
+    // Initialize theme service to ensure proper theme responsiveness
     this.initializeThemeService();
-    
-    // Stage 3: Load settings (with fallbacks)
-    await this.loadThemePreference();
-    
-    // Stage 4: Set up subscriptions
-    if (definitionRegistered) {
-      this.subscribeToThemeSettings();
-    }
   }
   
   /**
@@ -173,27 +160,21 @@ class ComponentTheme extends React.Component<ComponentThemeProps, ComponentTheme
   initializeThemeService() {
     if (this.props.services?.theme) {
       try {
-        console.log('Initializing theme service...');
         const theme = this.props.services.theme.getCurrentTheme();
-        console.log('Current theme retrieved:', theme);
         this.setState({ currentTheme: theme });
         
         // Subscribe to theme changes
         this.themeChangeListener = (newTheme: string) => {
-          console.log('Theme changed to:', newTheme);
           this.setState({ currentTheme: newTheme });
         };
         
-        console.log('Adding theme change listener...');
         this.props.services.theme.addThemeChangeListener(this.themeChangeListener);
-        console.log('Theme service initialized successfully');
       } catch (error) {
         console.error('Error initializing theme service:', error);
         this.setState({ error: 'Failed to initialize theme service' });
       }
     } else {
       console.warn('Theme service not available');
-      this.setState({ error: 'Theme service not available' });
     }
   }
   
@@ -272,20 +253,13 @@ class ComponentTheme extends React.Component<ComponentThemeProps, ComponentTheme
   handleToggleTheme() {
     if (!this.props.services?.theme) {
       console.error('Theme service not available');
-      this.setState({ error: 'Theme service not available' });
       return;
     }
     
     try {
-      // Toggle the theme
       this.props.services.theme.toggleTheme();
-      
-      // Save the new theme preference
-      const newTheme = this.props.services.theme.getCurrentTheme();
-      this.saveThemePreference(newTheme);
     } catch (error) {
       console.error('Error toggling theme:', error);
-      this.setState({ error: 'Failed to toggle theme' });
     }
   }
   
@@ -634,11 +608,12 @@ class ComponentTheme extends React.Component<ComponentThemeProps, ComponentTheme
   
   render() {
     const { currentTheme, useSystemTheme, isLoading, error } = this.state;
+    const themeClass = currentTheme === 'dark' ? 'dark-theme' : '';
     
     // Show loading state
     if (isLoading) {
       return (
-        <div className={`theme-paper ${currentTheme === 'dark' ? 'dark-theme' : ''}`}>
+        <div className={`theme-paper ${themeClass}`}>
           <div className="loading-spinner">
             <div className="spinner"></div>
             <span>Loading theme settings...</span>
@@ -648,8 +623,7 @@ class ComponentTheme extends React.Component<ComponentThemeProps, ComponentTheme
     }
     
     return (
-      <div className={`theme-paper ${currentTheme === 'dark' ? 'dark-theme' : ''}`}>
-      
+      <div className={`theme-paper ${themeClass}`}>
         {/* Error message if any */}
         {error && (
           <div className="error-message">
@@ -676,8 +650,6 @@ class ComponentTheme extends React.Component<ComponentThemeProps, ComponentTheme
               </label>
             </div>
           </div>
-          
-
         </div>
       </div>
     );

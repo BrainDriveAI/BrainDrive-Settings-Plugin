@@ -175,6 +175,10 @@ class BrainDriveSettingsLifecycleManager(BaseLifecycleManager):
                     "theme": {
                         "methods": ["getCurrentTheme", "addThemeChangeListener", "removeThemeChangeListener"],
                         "version": "1.0.0"
+                    },
+                    "settings": {
+                        "methods": ["getSetting", "setSetting", "registerSettingDefinition", "getSettingDefinitions", "subscribe", "subscribeToCategory"],
+                        "version": "1.0.0"
                     }
                 },
                 "dependencies": [],
@@ -203,6 +207,10 @@ class BrainDriveSettingsLifecycleManager(BaseLifecycleManager):
                     },
                     "theme": {
                         "methods": ["getCurrentTheme", "addThemeChangeListener", "removeThemeChangeListener"],
+                        "version": "1.0.0"
+                    },
+                    "settings": {
+                        "methods": ["getSetting", "setSetting", "registerSettingDefinition", "getSettingDefinitions", "subscribe", "subscribeToCategory"],
                         "version": "1.0.0"
                     }
                 },

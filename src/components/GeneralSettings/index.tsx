@@ -1,7 +1,6 @@
 import React from 'react';
 import '../../ComponentTheme.css';
 import './GeneralSettings.css';
-import { GENERAL_SETTINGS } from '../../settings-constants';
 import { GearIcon } from '../../icons';
 
 interface ApiService {
@@ -25,13 +24,8 @@ interface SettingsServiceBridge {
   getSetting: (name: string, context?: { userId?: string; pageId?: string }) => Promise<any>;
   setSetting: (name: string, value: any, context?: { userId?: string; pageId?: string }) => Promise<void>;
   
-  // Definition management
-  registerSettingDefinition?: (definition: any) => Promise<void>;
-  getSettingDefinitions?: (filter?: { category?: string; tags?: string[] }) => Promise<any[]>;
-  
-  // Subscription methods
+  // Subscription methods (optional)
   subscribe?: (key: string, callback: (value: any) => void) => () => void;
-  subscribeToCategory?: (category: string, callback: (value: any) => void) => () => void;
 }
 
 interface PageInfo {
@@ -55,41 +49,14 @@ interface GeneralSettingsState {
   currentTheme: string;
 }
 
-// General Settings Configuration
-const GENERAL_SETTINGS_CONFIG = {
-  DEFINITION_ID: 'general_settings',
-  CATEGORY: 'general',
-  SCHEMA: {
-    type: 'object',
-    properties: {
-      settings: {
-        type: 'array',
-        items: {
-          type: 'object',
-          properties: {
-            Setting_Name: { type: 'string' },
-            Setting_Data: { type: 'string' },
-            Setting_Help: { type: 'string' }
-          },
-          required: ['Setting_Name', 'Setting_Data']
-        }
-      }
-    }
-  },
-  DEFAULT_VALUE: {
-    settings: [
-      {
-        Setting_Name: 'default_page',
-        Setting_Data: 'Dashboard',
-        Setting_Help: 'This is the first page to be displayed after logging in to BrainDrive'
-      }
-    ]
-  }
-};
+// Settings key - simplified to match ServiceExample_Settings pattern
+const SETTINGS_KEY = 'general_settings';
 
 /**
  * ComponentGeneralSettings - A component that allows users to configure general application settings
  * such as the default landing page after login.
+ *
+ * Simplified to follow ServiceExample_Settings pattern for proper Settings Service Bridge usage.
  */
 class ComponentGeneralSettings extends React.Component<GeneralSettingsProps, GeneralSettingsState> {
   private themeChangeListener: ((theme: string) => void) | null = null;
@@ -103,7 +70,8 @@ class ComponentGeneralSettings extends React.Component<GeneralSettingsProps, Gen
       hasServices: !!props.services,
       hasApiService: props.services?.api ? 'YES' : 'NO',
       hasThemeService: props.services?.theme ? 'YES' : 'NO',
-      hasSettingsService: props.services?.settings ? 'YES' : 'NO'
+      hasSettingsService: props.services?.settings ? 'YES' : 'NO',
+      settingsServiceMethods: props.services?.settings ? Object.keys(props.services.settings) : 'N/A'
     });
     
     this.state = {
@@ -116,12 +84,12 @@ class ComponentGeneralSettings extends React.Component<GeneralSettingsProps, Gen
   }
 
   async componentDidMount() {
-    console.log('ComponentGeneralSettings componentDidMount - initializing...');
-    await this.initializeSettingsDefinition();
-    this.initializeSettingsSubscription();
+    console.log('ComponentGeneralSettings: Initializing...');
+    this.validateServices();
     this.initializeThemeService();
-    this.loadSettings();
-    this.loadPages();
+    this.initializeSettingsSubscription();
+    await this.loadSettings();
+    await this.loadPages();
   }
 
   componentWillUnmount() {
@@ -134,60 +102,53 @@ class ComponentGeneralSettings extends React.Component<GeneralSettingsProps, Gen
   }
 
   /**
-   * Initialize the General settings definition
+   * Validate that required services are available
    */
-  async initializeSettingsDefinition() {
-    if (!this.props.services?.settings?.registerSettingDefinition) {
-      console.warn('registerSettingDefinition method not available, assuming definition exists');
+  private validateServices(): void {
+    if (!this.props.services?.settings) {
+      console.error('ComponentGeneralSettings: Settings service not available');
+      this.setState({
+        error: 'Settings service not available',
+        isLoading: false
+      });
       return;
     }
 
-    try {
-      // Check if definition already exists
-      if (this.props.services.settings.getSettingDefinitions) {
-        const definitions = await this.props.services.settings.getSettingDefinitions({
-          category: GENERAL_SETTINGS_CONFIG.CATEGORY
-        });
-        
-        const existingDefinition = definitions.find(def => def.id === GENERAL_SETTINGS_CONFIG.DEFINITION_ID);
-        if (existingDefinition) {
-          console.log('General settings definition already exists');
-          return;
-        }
-      }
-
-      // Register the definition
-      await this.props.services.settings.registerSettingDefinition({
-        id: GENERAL_SETTINGS_CONFIG.DEFINITION_ID,
-        name: 'General Settings',
-        description: 'General application settings including default page configuration',
-        category: GENERAL_SETTINGS_CONFIG.CATEGORY,
-        scope: 'user',
-        schema: GENERAL_SETTINGS_CONFIG.SCHEMA,
-        defaultValue: GENERAL_SETTINGS_CONFIG.DEFAULT_VALUE,
-        tags: ['general', 'default_page', 'navigation']
+    if (typeof this.props.services.settings.getSetting !== 'function') {
+      console.error('ComponentGeneralSettings: getSetting method not available');
+      this.setState({
+        error: 'Settings service getSetting method not available',
+        isLoading: false
       });
-
-      console.log('General settings definition registered successfully');
-    } catch (error) {
-      console.error('Failed to register General settings definition:', error);
+      return;
     }
+
+    if (typeof this.props.services.settings.setSetting !== 'function') {
+      console.error('ComponentGeneralSettings: setSetting method not available');
+      this.setState({
+        error: 'Settings service setSetting method not available',
+        isLoading: false
+      });
+      return;
+    }
+
+    console.log('ComponentGeneralSettings: Service validation passed');
   }
 
   /**
-   * Initialize settings subscription for real-time updates
+   * Initialize settings subscription for real-time updates (optional)
    */
   initializeSettingsSubscription() {
     if (!this.props.services?.settings?.subscribe) {
-      console.warn('Settings service subscription not available');
+      console.log('ComponentGeneralSettings: Settings subscription not available (optional)');
       return;
     }
 
     // Subscribe to General settings changes
     this.settingsUnsubscribe = this.props.services.settings.subscribe(
-      GENERAL_SETTINGS_CONFIG.DEFINITION_ID,
+      SETTINGS_KEY,
       (value: any) => {
-        console.log('General settings updated:', value);
+        console.log('ComponentGeneralSettings: Settings updated via subscription:', value);
         if (value && value.settings) {
           const defaultPageSetting = value.settings.find((s: any) => s.Setting_Name === 'default_page');
           if (defaultPageSetting && defaultPageSetting.Setting_Data) {
@@ -263,44 +224,71 @@ class ComponentGeneralSettings extends React.Component<GeneralSettingsProps, Gen
   }
 
   /**
-   * Load general settings using Settings service
+   * Load general settings using Settings Service Bridge with API fallback
    */
   async loadSettings() {
+    this.setState({ isLoading: true, error: null });
+    
     if (!this.props.services?.settings) {
       // Fallback to API service if Settings service not available
       if (!this.props.services?.api) {
-        console.warn('Neither Settings nor API service available for loading settings');
+        console.warn('ComponentGeneralSettings: Neither Settings nor API service available');
+        this.setState({
+          selectedPage: 'Dashboard',
+          isLoading: false,
+          error: 'Neither Settings nor API service available - using default'
+        });
         return;
       }
+      console.log('ComponentGeneralSettings: Settings service not available, using API fallback');
       return this.loadSettingsFromAPI();
     }
     
     try {
-      console.log('Loading general settings...');
+      console.log('ComponentGeneralSettings: Loading settings with key:', SETTINGS_KEY);
+      
+      // Simple, direct call following ServiceExample_Settings pattern
       const settingsValue = await this.props.services.settings.getSetting(
-        GENERAL_SETTINGS_CONFIG.DEFINITION_ID,
+        SETTINGS_KEY,
         { userId: 'current' }
       );
       
       if (settingsValue && settingsValue.settings) {
-        console.log('General settings found:', settingsValue);
+        console.log('ComponentGeneralSettings: Settings found:', settingsValue);
         
         // Find the default page setting
         const defaultPageSetting = settingsValue.settings.find((s: any) => s.Setting_Name === 'default_page');
         
         if (defaultPageSetting && defaultPageSetting.Setting_Data) {
-          console.log('Default page setting found:', defaultPageSetting.Setting_Data);
-          this.setState({ selectedPage: defaultPageSetting.Setting_Data });
+          console.log('ComponentGeneralSettings: Default page setting found:', defaultPageSetting.Setting_Data);
+          this.setState({
+            selectedPage: defaultPageSetting.Setting_Data,
+            isLoading: false,
+            error: null
+          });
         } else {
-          console.log('No default page setting found, using Dashboard');
+          console.log('ComponentGeneralSettings: No default page setting found, using Dashboard');
+          this.setState({
+            selectedPage: 'Dashboard',
+            isLoading: false,
+            error: null
+          });
         }
       } else {
-        console.log('No general settings found, using defaults');
-        this.setState({ selectedPage: 'Dashboard' });
+        console.log('ComponentGeneralSettings: No settings found, using defaults');
+        this.setState({
+          selectedPage: 'Dashboard',
+          isLoading: false,
+          error: null
+        });
       }
     } catch (error) {
-      console.error('Error loading general settings:', error);
-      this.setState({ error: this.getErrorMessage(error) });
+      console.error('ComponentGeneralSettings: Error loading settings:', error);
+      this.setState({
+        selectedPage: 'Dashboard',
+        isLoading: false,
+        error: `Error loading settings: ${(error as any).message || 'Unknown error'}`
+      });
     }
   }
 
@@ -309,10 +297,10 @@ class ComponentGeneralSettings extends React.Component<GeneralSettingsProps, Gen
    */
   async loadSettingsFromAPI() {
     try {
-      console.log('Loading general settings from API...');
+      console.log('ComponentGeneralSettings: Loading settings from API fallback...');
       const response = await this.props.services!.api!.get('/api/v1/settings/instances', {
         params: {
-          definition_id: GENERAL_SETTINGS.DEFINITION_ID,
+          definition_id: SETTINGS_KEY,
           scope: 'user',
           user_id: 'current'
         }
@@ -330,42 +318,62 @@ class ComponentGeneralSettings extends React.Component<GeneralSettingsProps, Gen
       }
       
       if (instance) {
-        console.log('General settings found:', instance);
+        console.log('ComponentGeneralSettings: Settings found via API:', instance);
         
         const value = typeof instance.value === 'string' ? JSON.parse(instance.value) : instance.value;
         const defaultPageSetting = value?.settings?.find((s: any) => s.Setting_Name === 'default_page');
         
         if (defaultPageSetting && defaultPageSetting.Setting_Data) {
-          console.log('Default page setting found:', defaultPageSetting.Setting_Data);
-          this.setState({ selectedPage: defaultPageSetting.Setting_Data });
+          console.log('ComponentGeneralSettings: Default page setting found via API:', defaultPageSetting.Setting_Data);
+          this.setState({
+            selectedPage: defaultPageSetting.Setting_Data,
+            isLoading: false,
+            error: null
+          });
         } else {
-          console.log('No default page setting found, using Dashboard');
+          console.log('ComponentGeneralSettings: No default page setting found via API, using Dashboard');
+          this.setState({
+            selectedPage: 'Dashboard',
+            isLoading: false,
+            error: null
+          });
         }
       } else {
-        console.log('No general settings found, will create new on save');
+        console.log('ComponentGeneralSettings: No settings found via API, using defaults');
+        this.setState({
+          selectedPage: 'Dashboard',
+          isLoading: false,
+          error: null
+        });
       }
     } catch (error) {
-      console.error('Error loading general settings:', error);
-      this.setState({ error: this.getErrorMessage(error) });
+      console.error('ComponentGeneralSettings: Error loading settings via API:', error);
+      this.setState({
+        selectedPage: 'Dashboard',
+        isLoading: false,
+        error: `Error loading settings: ${(error as any).message || 'Unknown error'}`
+      });
     }
   }
 
   /**
-   * Save general settings using Settings service
+   * Save general settings using Settings Service Bridge with API fallback
    */
   async saveSettings(newPage: string) {
     if (!this.props.services?.settings) {
       // Fallback to API service if Settings service not available
       if (!this.props.services?.api) {
-        console.warn('Neither Settings nor API service available for saving settings');
+        console.warn('ComponentGeneralSettings: Neither Settings nor API service available for saving');
+        this.setState({ error: 'Settings service not available' });
         return;
       }
       return this.saveSettingsToAPI(newPage);
     }
     
     try {
-      console.log('Saving general settings, new default page:', newPage);
+      console.log('ComponentGeneralSettings: Saving settings, new default page:', newPage);
       
+      // Prepare settings value following the same structure
       const settingsValue = {
         settings: [
           {
@@ -376,18 +384,18 @@ class ComponentGeneralSettings extends React.Component<GeneralSettingsProps, Gen
         ]
       };
       
-      // Use Settings service to save general settings
+      // Simple, direct call following ServiceExample_Settings pattern
       await this.props.services.settings.setSetting(
-        GENERAL_SETTINGS_CONFIG.DEFINITION_ID,
+        SETTINGS_KEY,
         settingsValue,
         { userId: 'current' }
       );
       
-      console.log('Settings saved successfully');
+      console.log('ComponentGeneralSettings: Settings saved successfully');
       this.setState({ selectedPage: newPage, error: null });
     } catch (error) {
-      console.error('Error saving general settings:', error);
-      this.setState({ error: this.getErrorMessage(error) });
+      console.error('ComponentGeneralSettings: Error saving settings:', error);
+      this.setState({ error: `Error saving settings: ${(error as any).message || 'Unknown error'}` });
     }
   }
 
@@ -396,7 +404,7 @@ class ComponentGeneralSettings extends React.Component<GeneralSettingsProps, Gen
    */
   async saveSettingsToAPI(newPage: string) {
     try {
-      console.log('Saving general settings to API, new default page:', newPage);
+      console.log('ComponentGeneralSettings: Saving settings to API fallback, new default page:', newPage);
       
       const value = {
         settings: [
@@ -409,8 +417,8 @@ class ComponentGeneralSettings extends React.Component<GeneralSettingsProps, Gen
       };
       
       const payload: any = {
-        definition_id: GENERAL_SETTINGS.DEFINITION_ID,
-        name: GENERAL_SETTINGS.NAME,
+        definition_id: SETTINGS_KEY,
+        name: 'General Settings',
         value,
         scope: 'user',
         user_id: 'current'
@@ -419,15 +427,15 @@ class ComponentGeneralSettings extends React.Component<GeneralSettingsProps, Gen
       const resp = await this.props.services!.api!.post('/api/v1/settings/instances', payload);
       
       if (resp?.id) {
-        console.log('Settings saved successfully, ID:', resp.id);
-        this.setState({ error: null });
+        console.log('ComponentGeneralSettings: Settings saved successfully via API, ID:', resp.id);
+        this.setState({ selectedPage: newPage, error: null });
       } else {
-        console.log('Settings saved, but no ID returned');
-        this.setState({ error: null });
+        console.log('ComponentGeneralSettings: Settings saved via API, but no ID returned');
+        this.setState({ selectedPage: newPage, error: null });
       }
     } catch (error) {
-      console.error('Error saving general settings:', error);
-      this.setState({ error: this.getErrorMessage(error) });
+      console.error('ComponentGeneralSettings: Error saving settings via API:', error);
+      this.setState({ error: `Error saving settings: ${(error as any).message || 'Unknown error'}` });
     }
   }
 
@@ -445,12 +453,12 @@ class ComponentGeneralSettings extends React.Component<GeneralSettingsProps, Gen
    * Get user-friendly error message
    */
   getErrorMessage(error: any): string {
-    if (error.message && error.message.includes('network')) {
+    if (error?.message && error.message.includes('network')) {
       return 'Network error: Could not connect to settings service';
-    } else if (error.message && error.message.includes('permission')) {
+    } else if (error?.message && error.message.includes('permission')) {
       return 'Permission denied: You do not have access to these settings';
     } else {
-      return `Error: ${error.message || 'Unknown error'}`;
+      return `Error: ${error?.message || 'Unknown error'}`;
     }
   }
 

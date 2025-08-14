@@ -539,9 +539,9 @@ class ComponentOllamaServer extends React.Component<OllamaServerComponentProps, 
       return s;
     });
 
-    this.setState({ 
+    this.setState({
       servers: updatedServers,
-      errorMessage: '' 
+      errorMessage: ''
     });
     
     if (!this.props.services?.api) {
@@ -550,12 +550,19 @@ class ComponentOllamaServer extends React.Component<OllamaServerComponentProps, 
       return;
     }
     
+    // Validate server address
+    if (!server.serverAddress || !server.serverAddress.trim()) {
+      this.updateServerStatus(serverId, 'error');
+      this.setState({ errorMessage: 'Server address is required' });
+      return;
+    }
+    
     try {
-      const encodedUrl = encodeURIComponent(server.serverAddress);
+      const encodedUrl = encodeURIComponent(server.serverAddress.trim());
       const params: Record<string, string> = { server_url: encodedUrl };
       
-      if (server.apiKey) {
-        params.api_key = server.apiKey;
+      if (server.apiKey && server.apiKey.trim()) {
+        params.api_key = server.apiKey.trim();
       }
       
       const response = await this.props.services.api.get('/api/v1/ollama/test', { params });
@@ -565,15 +572,36 @@ class ComponentOllamaServer extends React.Component<OllamaServerComponentProps, 
         this.updateServerStatus(serverId, 'success');
       } else {
         this.updateServerStatus(serverId, 'error');
-        this.setState({ 
+        this.setState({
           errorMessage: 'Connection failed. Please check your server address and API key.'
         });
       }
     } catch (error: any) {
       this.updateServerStatus(serverId, 'error');
-      this.setState({ 
-        errorMessage: 'Connection failed. Please check your server address and API key.'
-      });
+      
+      let errorMessage = 'Connection failed. Please check your server address and API key.';
+      
+      // Provide more specific error messages
+      if (error.response) {
+        const status = error.response.status;
+        const detail = error.response.data?.detail || error.response.data?.message || '';
+        
+        if (status === 422) {
+          errorMessage = `Validation error: ${detail}`;
+        } else if (status === 400) {
+          errorMessage = `Bad request: ${detail}`;
+        } else if (status === 503 || status === 504) {
+          errorMessage = 'Server is unreachable. Please check if Ollama is running.';
+        } else {
+          errorMessage = `Server error (${status}): ${detail}`;
+        }
+      } else if (error.code === 'ERR_NETWORK') {
+        errorMessage = 'Network error. Please check your connection.';
+      } else if (error.message) {
+        errorMessage = `Error: ${error.message}`;
+      }
+      
+      this.setState({ errorMessage });
     }
   };
 

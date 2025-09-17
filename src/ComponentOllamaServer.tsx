@@ -91,8 +91,9 @@ interface OllamaServerComponentProps {
   services: {
     api?: {
       get: (url: string, options?: any) => Promise<ApiResponse>;
-      post: (url: string, data: any) => Promise<ApiResponse>;
+      post: (url: string, data: any, config?: any) => Promise<ApiResponse>;
       delete: (url: string, options?: any) => Promise<ApiResponse>;
+      getSse?: (path: string, onMessage?: (data: string) => void) => Promise<void>;
     };
     theme?: {
       getCurrentTheme: () => string;
@@ -936,8 +937,13 @@ class ComponentOllamaServer extends React.Component<OllamaServerComponentProps, 
     }));
 
     try {
-      // Simulate installation process
-      await this.performModelInstallation(installation, server.serverAddress, server.apiKey, { timeout: 600000 });
+      // Kick off background installation (do not await to keep UI responsive)
+      this.performModelInstallation(installation, server.serverAddress, server.apiKey, { timeout: 600000 })
+        .catch((e) => {
+          console.error('Background installation error:', e);
+          this.updateInstallationStatus(installation.id, 'error', 0, e?.message || 'Install failed');
+        });
+      // Close modal immediately
       this.setState({ showInstallModal: false, errorMessage: '' });
     } catch (error: any) {
       console.error('Installation error:', error);
@@ -955,8 +961,8 @@ class ComponentOllamaServer extends React.Component<OllamaServerComponentProps, 
 
     console.log('API service available:', this.props.services.api);
 
-    // Update status to downloading
-    this.updateInstallationStatus(installation.id, 'downloading', 0);
+    // Update status to pending/queued with message
+    this.updateInstallationStatus(installation.id, 'pending', 0, undefined, 'Queued');
 
     try {
       const requestData = {
@@ -967,35 +973,126 @@ class ComponentOllamaServer extends React.Component<OllamaServerComponentProps, 
 
       console.log('Sending install request:', requestData);
       
-      // Use the API service instead of fetch directly
-      const response = await this.props.services.api.post('/api/v1/ollama/install', requestData);
-      
-      console.log('Install response:', response);
-      
-      // Check if this is a streaming response or a regular response
-      if (response && typeof response === 'object') {
-        // Handle regular response (non-streaming)
-        if (response.data?.status === 'success') {
-          if (response.data?.already_exists) {
-            this.updateInstallationStatus(installation.id, 'completed', 100, undefined, 'Model already exists');
-          } else {
-            this.updateInstallationStatus(installation.id, 'completed', 100);
-          }
-          // Remove after 3 seconds
-          setTimeout(() => {
-            this.removeInstallation(installation.id);
-          }, 3000);
-          return;
-        } else if (response.data?.error) {
-          throw new Error(response.data.error);
-        }
+      // Enqueue background install and get task_id
+      const response: any = await this.props.services.api.post('/api/v1/ollama/install', requestData, { timeout: 10000 });
+      console.log('Install task response:', response);
+
+      const taskId = response?.task_id || response?.data?.task_id;
+      if (!taskId) {
+        throw new Error('Failed to start install task');
       }
-      
-      // If we get here, assume completion
-      this.updateInstallationStatus(installation.id, 'completed', 100);
-      setTimeout(() => {
-        this.removeInstallation(installation.id);
-      }, 3000);
+
+      // Prefer SSE if available; fallback to polling status
+      if (this.props.services.api.getSse) {
+        await this.props.services.api.getSse(`/api/v1/ollama/install/${taskId}/events`, async (chunk: string) => {
+          try {
+            const evt = JSON.parse(chunk);
+            // Debug: surface event to console to aid troubleshooting
+            try { console.debug('Ollama install event:', evt); } catch {}
+            const evtState = String(evt.state || '');
+            const progress = typeof evt.progress === 'number' ? evt.progress : undefined;
+            const message = evt.message as string | undefined;
+
+            // Treat queued/running as installing
+            if (evtState === 'queued' || evtState === 'running') {
+              const stageMessage = message || (evt?.raw?.status as string) || (evtState === 'queued' ? 'Queued…' : 'Connecting…');
+              this.updateInstallationStatus(installation.id, 'downloading', progress ?? installation.progress, undefined, stageMessage);
+              return;
+            }
+
+            if (evtState === 'canceled') {
+              this.updateInstallationStatus(installation.id, 'error', 0, 'Canceled');
+              return;
+            }
+            if (evtState === 'error') {
+              this.updateInstallationStatus(installation.id, 'error', 0, (evt.error as string) || message || 'Install failed');
+              return;
+            }
+            // Treat completion only on explicit completed state or success signal from Ollama
+            const rawStatus = String(evt?.raw?.status || '').toLowerCase();
+            if (evtState === 'completed' || rawStatus === 'success') {
+              // Show finalizing until the model appears in tags
+              this.updateInstallationStatus(installation.id, 'downloading', 100, undefined, 'Finalizing…');
+              const available = await this.confirmModelAvailability(serverAddress, apiKey, installation.modelName, 30000);
+              if (available) {
+                const customMessage = evt.already_exists ? 'Model already exists' : 'Installation completed';
+                this.updateInstallationStatus(installation.id, 'completed', 100, undefined, customMessage);
+                if (this.state.activeServerId) {
+                  this.loadModels(this.state.activeServerId);
+                }
+                setTimeout(() => this.removeInstallation(installation.id), 1500);
+              }
+              return;
+            }
+            // Default: show downloading with progress if any
+            const stageMessage = message || (evt?.raw?.status as string) || 'Installing model…';
+            this.updateInstallationStatus(installation.id, 'downloading', progress ?? installation.progress, undefined, stageMessage);
+          } catch (e) {
+            // Non-JSON line; ignore
+          }
+        });
+      } else {
+        // Polling fallback if SSE helper is unavailable
+        const poll = async () => {
+          try {
+            // Use short polling interval to keep UI responsive
+            const status: any = await this.props.services!.api!.get(`/api/v1/ollama/install/${taskId}`);
+            const evtState = String(status?.state || '');
+            const progress = typeof status?.progress === 'number' ? status.progress : undefined;
+            const message = status?.message as string | undefined;
+
+            if (evtState === 'queued' || evtState === 'running') {
+              this.updateInstallationStatus(installation.id, 'downloading', progress ?? installation.progress, undefined, message || 'Installing model…');
+              return false;
+            }
+
+            if (evtState === 'canceled') {
+              this.updateInstallationStatus(installation.id, 'error', 0, 'Canceled');
+              return true;
+            }
+            if (evtState === 'error') {
+              this.updateInstallationStatus(installation.id, 'error', 0, (status?.error as string) || message || 'Install failed');
+              return true;
+            }
+            // Only complete on explicit completed state
+            if (evtState === 'completed') {
+              // Finalizing until visible
+              this.updateInstallationStatus(installation.id, 'downloading', 100, undefined, 'Finalizing…');
+              const available = await this.confirmModelAvailability(serverAddress, apiKey, installation.modelName, 30000);
+              if (available) {
+                const customMessage = status?.already_exists ? 'Model already exists' : 'Installation completed';
+                this.updateInstallationStatus(installation.id, 'completed', 100, undefined, customMessage);
+                if (this.state.activeServerId) {
+                  this.loadModels(this.state.activeServerId);
+                }
+                setTimeout(() => this.removeInstallation(installation.id), 1500);
+                return true;
+              }
+              return false;
+            }
+            this.updateInstallationStatus(installation.id, 'downloading', progress ?? installation.progress, undefined, message || 'Installing model…');
+            return false;
+          } catch (e: any) {
+            // On 404, assume server restart and stop polling
+            if (e?.status === 404) {
+              this.updateInstallationStatus(installation.id, 'error', 0, 'Install interrupted (server restarted)');
+              return true;
+            }
+            // Transient error: keep polling
+            return false;
+          }
+        };
+
+        // Poll until terminal
+        const loop = async () => {
+          while (true) {
+            const done = await poll();
+            if (done) break;
+            await new Promise(r => setTimeout(r, 1000));
+          }
+        };
+        loop();
+      }
 
     } catch (error: any) {
       console.error('Install error:', error);
@@ -1487,12 +1584,16 @@ class ComponentOllamaServer extends React.Component<OllamaServerComponentProps, 
                                 style={{ width: `${installation.progress}%` }}
                               />
                             </div>
-                            <span>Downloading... {installation.progress}%</span>
+                            <span>
+                              Downloading... {installation.progress}%{installation.customMessage ? ` • ${installation.customMessage}` : ''}
+                            </span>
                           </div>
                         ) : (
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <div className="spinner-small" />
-                            <span>Downloading...</span>
+                            <span>
+                              {installation.customMessage ? installation.customMessage : 'Downloading...'}
+                            </span>
                           </div>
                         )
                       )}
@@ -1867,6 +1968,36 @@ class ComponentOllamaServer extends React.Component<OllamaServerComponentProps, 
       </div>
     );
   }
+
+  // Confirm that a model appears in Ollama's tags list before removing the install row
+  private confirmModelAvailability = async (
+    serverAddress: string,
+    apiKey: string | undefined,
+    modelName: string,
+    timeoutMs: number = 20000
+  ): Promise<boolean> => {
+    const start = Date.now();
+    const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+    try {
+      while (Date.now() - start < timeoutMs) {
+        try {
+          const encodedUrl = encodeURIComponent(serverAddress);
+          const params: Record<string, string> = { server_url: encodedUrl };
+          if (apiKey) params.api_key = apiKey;
+          const models: any = await this.props.services!.api!.get('/api/v1/ollama/models', { params });
+          if (Array.isArray(models) && models.some((m: any) => m?.name === modelName)) {
+            return true;
+          }
+        } catch (e) {
+          // Ignore transient errors
+        }
+        await sleep(1000);
+      }
+    } catch (e) {
+      // ignore
+    }
+    return false;
+  };
 }
 
 export default ComponentOllamaServer;

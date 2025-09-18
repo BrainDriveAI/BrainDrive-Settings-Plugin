@@ -319,6 +319,35 @@ class ComponentOllamaServer extends React.Component<OllamaServerComponentProps, 
     return 'server_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
   };
 
+  private applyLoadedServers = (servers: ServerConfig[]) => {
+    let serverToLoadModels: string | null = null;
+
+    this.setState(prevState => {
+      const activeExists = !!(prevState.activeServerId && servers.some(server => server.id === prevState.activeServerId));
+      const nextActiveServerId = activeExists
+        ? prevState.activeServerId
+        : (servers.length > 0 ? servers[0].id : null);
+
+      if (prevState.activeTab === 'models' && nextActiveServerId && nextActiveServerId !== prevState.activeServerId) {
+        serverToLoadModels = nextActiveServerId;
+      }
+
+      const nextIsAddingNew = nextActiveServerId ? false : prevState.isAddingNew;
+
+      return {
+        servers,
+        isLoading: false,
+        errorMessage: '',
+        activeServerId: nextActiveServerId,
+        isAddingNew: nextIsAddingNew
+      };
+    }, () => {
+      if (serverToLoadModels) {
+        this.loadModels(serverToLoadModels);
+      }
+    });
+  };
+
   loadSettings = async () => {
     this.setState({ isLoading: true, errorMessage: '' });
     
@@ -351,18 +380,10 @@ class ComponentOllamaServer extends React.Component<OllamaServerComponentProps, 
           connectionStatus: server.connectionStatus || 'idle'
         }));
         
-        this.setState({
-          servers,
-          isLoading: false,
-          errorMessage: ''
-        });
+        this.applyLoadedServers(servers);
       } else {
         // No settings found, use default empty array
-        this.setState({
-          servers: [],
-          isLoading: false,
-          errorMessage: ''
-        });
+        this.applyLoadedServers([]);
       }
     } catch (error: any) {
       console.error('Error loading Ollama settings:', error);
@@ -430,17 +451,9 @@ class ComponentOllamaServer extends React.Component<OllamaServerComponentProps, 
           }
         }
         
-        this.setState({
-          servers,
-          isLoading: false,
-          errorMessage: ''
-        });
+        this.applyLoadedServers(servers);
       } else {
-        this.setState({
-          servers: [],
-          isLoading: false,
-          errorMessage: ''
-        });
+        this.applyLoadedServers([]);
       }
     } catch (error: any) {
       this.setState({

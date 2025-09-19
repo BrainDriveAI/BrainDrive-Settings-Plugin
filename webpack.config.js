@@ -7,7 +7,7 @@ module.exports = {
   mode: "development",
   entry: "./src/index",
   output: {
-    //path: path.resolve(__dirname, '../../backend/plugins/shared/BrainDriveSettings/v1.0.4/dist'),
+    //path: path.resolve(__dirname, '../../backend/plugins/shared/BrainDriveSettings/v1.0.5/dist'),
     path: path.resolve(__dirname, 'dist'),
     publicPath: "auto",
     clean: true,

@@ -184,7 +184,7 @@ class ComponentOllamaServer extends React.Component<OllamaServerComponentProps, 
       isAddingNew: false,
       
       // New state initialization
-      activeTab: 'servers',
+      activeTab: 'models',
       models: [],
       modelsLoading: false,
       modelsError: '',
@@ -242,6 +242,13 @@ class ComponentOllamaServer extends React.Component<OllamaServerComponentProps, 
         
         const existingDefinition = definitions.find(def => def.id === OLLAMA_SETTINGS.DEFINITION_ID);
         if (existingDefinition) {
+          if (!Array.isArray(existingDefinition.allowedScopes) || existingDefinition.allowedScopes.length === 0) {
+            console.log('Updating Ollama settings definition metadata to include allowed scopes');
+            (existingDefinition as any).allowedScopes = ['user'];
+            if ('scope' in existingDefinition) {
+              delete (existingDefinition as any).scope;
+            }
+          }
           console.log('Ollama settings definition already exists');
           return;
         }
@@ -253,7 +260,7 @@ class ComponentOllamaServer extends React.Component<OllamaServerComponentProps, 
         name: 'Ollama Servers Settings',
         description: 'Configuration for multiple Ollama server connections',
         category: OLLAMA_SETTINGS.CATEGORY,
-        scope: 'user',
+        allowedScopes: ['user'],
         schema: OLLAMA_SETTINGS.SCHEMA,
         defaultValue: OLLAMA_SETTINGS.DEFAULT_VALUE,
         tags: ['ollama', 'llm', 'servers', 'ai']
@@ -470,7 +477,8 @@ class ComponentOllamaServer extends React.Component<OllamaServerComponentProps, 
         this.setState({ errorMessage: 'Neither Settings nor API service available' });
         return;
       }
-      return this.saveSettingsToAPI();
+      await this.saveSettingsToAPI();
+      return;
     }
 
     this.setState({ isSaving: true, errorMessage: '' });
@@ -505,7 +513,21 @@ class ComponentOllamaServer extends React.Component<OllamaServerComponentProps, 
       
       alert('Settings saved successfully!');
     } catch (error: any) {
-      console.error('Error saving Ollama settings:', error);
+      console.error('Error saving Ollama settings via settings service:', error);
+
+      if (this.props.services?.api) {
+        const savedViaApi = await this.saveSettingsToAPI({ skipInitialStateUpdate: true });
+        if (savedViaApi) {
+          return;
+        }
+        // If API fallback failed, ensure an error message is shown
+        this.setState(prevState => ({
+          isSaving: false,
+          errorMessage: prevState.errorMessage || `Error saving settings: ${error.message || 'Unknown error'}`
+        }));
+        return;
+      }
+
       this.setState({
         isSaving: false,
         errorMessage: `Error saving settings: ${error.message || 'Unknown error'}`
@@ -516,8 +538,10 @@ class ComponentOllamaServer extends React.Component<OllamaServerComponentProps, 
   /**
    * Fallback method to save settings to API when Settings service is not available
    */
-  saveSettingsToAPI = async () => {
-    this.setState({ isSaving: true, errorMessage: '' });
+  saveSettingsToAPI = async (options: { skipInitialStateUpdate?: boolean } = {}): Promise<boolean> => {
+    if (!options.skipInitialStateUpdate) {
+      this.setState({ isSaving: true, errorMessage: '' });
+    }
 
     try {
       const serverConfigs: ServerConfig[] = [];
@@ -532,17 +556,46 @@ class ComponentOllamaServer extends React.Component<OllamaServerComponentProps, 
         });
       }
 
-      const settingsData = {
-        definition_id: 'ollama_servers_settings',
+      let existingInstanceId: string | null = null;
+      try {
+        const response = await this.props.services!.api!.get('/api/v1/settings/instances', {
+          params: {
+            definition_id: OLLAMA_SETTINGS.DEFINITION_ID,
+            scope: 'user',
+            user_id: 'current'
+          }
+        });
+
+        const responseData = Array.isArray(response)
+          ? response
+          : Array.isArray(response?.data)
+            ? response.data
+            : response?.data
+              ? [response.data]
+              : [];
+
+        if (Array.isArray(responseData) && responseData.length > 0 && responseData[0]?.id) {
+          existingInstanceId = responseData[0].id;
+        }
+      } catch (fetchError) {
+        console.error('Error checking existing Ollama settings instance:', fetchError);
+      }
+
+      const settingsData: Record<string, any> = {
+        definition_id: OLLAMA_SETTINGS.DEFINITION_ID,
         name: 'Ollama Servers Settings',
         value: {
           servers: serverConfigs
         },
-        scope: "user",
-        user_id: "current"
+        scope: 'user',
+        user_id: 'current'
       };
 
-      const response = await this.props.services!.api!.post('/api/v1/settings/instances', settingsData);
+      if (existingInstanceId) {
+        settingsData.id = existingInstanceId;
+      }
+
+      await this.props.services!.api!.post('/api/v1/settings/instances', settingsData);
       
       this.setState({
         isSaving: false,
@@ -550,13 +603,15 @@ class ComponentOllamaServer extends React.Component<OllamaServerComponentProps, 
         isAddingNew: false,
         activeServerId: null
       });
-      
+
       alert('Settings saved successfully!');
+      return true;
     } catch (error: any) {
       this.setState({
         isSaving: false,
         errorMessage: `Error saving settings: ${error.message || 'Unknown error'}`
       });
+      return false;
     }
   };
 

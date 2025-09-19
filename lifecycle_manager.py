@@ -102,7 +102,7 @@ class BrainDriveSettingsLifecycleManager(BaseLifecycleManager):
         self.plugin_data = {
             "name": "BrainDrive Settings",
             "description": "Basic BrainDrive Settings Plugin",
-            "version": "1.0.5",
+            "version": "1.0.6",
             "type": "frontend",
             "icon": "Dashboard",
             "category": "Utilities",

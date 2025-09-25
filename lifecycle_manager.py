@@ -117,8 +117,8 @@ class BrainDriveSettingsLifecycleManager(BaseLifecycleManager):
             "plugin_slug": "BrainDriveSettings",
             # Update tracking fields (matching plugin model)
             "source_type": "remote",
-            "source_url": "https://github.com/DJJones66/BrainDriveSettings",
-            "update_check_url": "https://api.github.com/repos/DJJones66/BrainDriveSettings/releases/latest",
+            "source_url": "https://github.com/BrainDriveAI/BrainDrive-Settings-Plugin",
+            "update_check_url": "https://github.com/BrainDriveAI/BrainDrive-Settings-Plugin/releases/latest",
             "last_update_check": None,
             "update_available": False,
             "latest_version": None,

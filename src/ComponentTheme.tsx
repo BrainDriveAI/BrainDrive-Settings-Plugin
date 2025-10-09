@@ -500,7 +500,7 @@ class ComponentTheme extends React.Component<ComponentThemeProps, ComponentTheme
       
       console.log('Saving theme preference:', settings);
       
-      // Use the direct API approach similar to ComponentOllama
+      // Use the direct API approach similar to other plugin modules
       if (this.props.services.api) {
         const settingsData = {
           definition_id: THEME_SETTINGS.DEFINITION_ID,

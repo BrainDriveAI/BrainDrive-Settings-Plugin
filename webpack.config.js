@@ -43,7 +43,6 @@ module.exports = {
       filename: "remoteEntry.js",
       exposes: {
         "./ComponentTheme": "./src/ComponentTheme",
-        "./ComponentOllamaServer": "./src/ComponentOllamaServer",
         "./ComponentGeneralSettings": "./src/components/GeneralSettings/index"
 
       },

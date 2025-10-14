@@ -3,7 +3,7 @@
 [![License](https://img.shields.io/badge/License-MIT%20License-green.svg)](LICENSE)
 [![BrainDrive](https://img.shields.io/badge/BrainDrive-Plugin-purple.svg)](https://github.com/BrainDriveAI/BrainDrive-Core)
 
-A comprehensive settings management plugin for [BrainDrive](https://github.com/BrainDriveAI/BrainDrive-Core) that provides essential configuration capabilities including theme management, general settings, and Ollama server configuration.
+A comprehensive settings management plugin for [BrainDrive](https://docs.braindrive.ai) that provides essential configuration capabilities including theme management, general settings, and Ollama server configuration.
 
 ## 🚀 Features
 

@@ -102,7 +102,7 @@ class BrainDriveSettingsLifecycleManager(BaseLifecycleManager):
         self.plugin_data = {
             "name": "BrainDrive Settings",
             "description": "Basic BrainDrive Settings Plugin",
-            "version": "1.0.6",
+            "version": "1.0.7",
             "type": "frontend",
             "icon": "Dashboard",
             "category": "Utilities",
@@ -113,7 +113,7 @@ class BrainDriveSettingsLifecycleManager(BaseLifecycleManager):
             "bundle_method": "webpack",
             "bundle_location": "dist/remoteEntry.js",
             "is_local": False,
-            "long_description": "Comprehensive settings management for BrainDrive including theme settings, general configuration, and Ollama server management.",
+            "long_description": "Comprehensive settings management for BrainDrive including theme preferences and general configuration.",
             "plugin_slug": "BrainDriveSettings",
             # Update tracking fields (matching plugin model)
             "source_type": "remote",
@@ -189,39 +189,6 @@ class BrainDriveSettingsLifecycleManager(BaseLifecycleManager):
                     "defaultHeight": 1
                 },
                 "tags": ["Settings", "General Settings"]
-            },
-            {
-                "name": "ComponentOllamaServer",
-                "display_name": "Ollama Servers",
-                "description": "Manage multiple Ollama server connections",
-                "icon": "Storage",
-                "category": "LLM Servers",
-                "priority": 1,
-                "props": {},
-                "config_fields": {},
-                "messages": {"sends": [], "receives": []},
-                "required_services": {
-                    "api": {
-                        "methods": ["get", "post", "delete"],
-                        "version": "1.0.0"
-                    },
-                    "theme": {
-                        "methods": ["getCurrentTheme", "addThemeChangeListener", "removeThemeChangeListener"],
-                        "version": "1.0.0"
-                    },
-                    "settings": {
-                        "methods": ["getSetting", "setSetting", "registerSettingDefinition", "getSettingDefinitions", "subscribe", "subscribeToCategory"],
-                        "version": "1.0.0"
-                    }
-                },
-                "dependencies": [],
-                "layout": {
-                    "minWidth": 6,
-                    "minHeight": 4,
-                    "defaultWidth": 8,
-                    "defaultHeight": 5
-                },
-                "tags": ["Settings", "Ollama Server Settings", "Multiple Servers"]
             }
         ]
         
@@ -234,18 +201,6 @@ class BrainDriveSettingsLifecycleManager(BaseLifecycleManager):
                 "category": "auto_generated",
                 "type": "object",
                 "default_value": '{"theme": "light", "useSystemTheme": false}',
-                "allowed_scopes": '["system", "user", "page", "user_page"]',
-                "validation": None,
-                "is_multiple": False,
-                "tags": '["auto_generated"]'
-            },
-            {
-                "id": "ollama_servers_settings",
-                "name": "Ollama Servers Settings",
-                "description": "Auto-generated definition for Ollama Servers Settings",
-                "category": "auto_generated",
-                "type": "object",
-                "default_value": '{"servers": [{"id": "server_1742054635336_5puc3mrll", "serverName": "New Server", "serverAddress": "http://localhost:11434", "apiKey": "", "connectionStatus": "idle"}]}',
                 "allowed_scopes": '["system", "user", "page", "user_page"]',
                 "validation": None,
                 "is_multiple": False,
@@ -578,12 +533,6 @@ class BrainDriveSettingsLifecycleManager(BaseLifecycleManager):
                     "definition_id": "theme_settings",
                     "name": "Theme Settings",
                     "value": '{"theme": "light", "useSystemTheme": false}',
-                    "scope": "user"
-                },
-                {
-                    "definition_id": "ollama_servers_settings",
-                    "name": "Ollama Servers Settings",
-                    "value": '{"servers": [{"id": "server_1742054635336_5puc3mrll", "serverName": "New Server", "serverAddress": "http://localhost:11434", "apiKey": "", "connectionStatus": "idle"}]}',
                     "scope": "user"
                 },
                 {

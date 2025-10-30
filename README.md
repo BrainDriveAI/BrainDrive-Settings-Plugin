@@ -34,7 +34,7 @@ Existing deployments should install version `1.1.0` alongside the new BrainDrive
 
 ## License
 
-[MIT License](./LICENSE)
+[MIT License](./LICENSE) Your AI. Your Rules.
 
 ## Resources
 

@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![BrainDrive](https://img.shields.io/badge/BrainDrive-Plugin-purple.svg)](https://github.com/BrainDriveAI/BrainDrive)
 
-Core BrainDrive configuration plugin providing theme selection and general preference management. 
+Core [BrainDrive](https://braindrive.ai) configuration plugin providing theme selection and general preference management. 
 
 ![BrainDrive Settings Page](https://raw.githubusercontent.com/BrainDriveAI/BrainDrive-Core/refs/heads/main/images/braindrive-settings-page.png)
 

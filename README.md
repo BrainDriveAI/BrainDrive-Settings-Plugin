@@ -6,6 +6,8 @@
 
 Core BrainDrive configuration plugin providing theme selection and general preference management. Ollama-specific functionality now lives in the dedicated [BrainDrive Ollama Plugin](https://github.com/BrainDriveAI/BrainDrive-Ollama-Plugin).
 
+![BrainDrive Settings Page](https://raw.githubusercontent.com/BrainDriveAI/BrainDrive-Core/refs/heads/main/images/braindrive-settings-page.png)
+
 ## Features
 - Theme selector with system detection and persisted preferences
 - General settings module for default page and application-level options
@@ -31,4 +33,10 @@ Artifacts are emitted to `dist/remoteEntry.js` for BrainDrive to consume.
 Existing deployments should install version `1.1.0` alongside the new BrainDrive Ollama plugin to retain all prior functionality.
 
 ## License
-MIT © BrainDrive.ai
+
+[MIT License](./LICENSE)
+
+## Resources
+
+* [BrainDrive Docs Site](https://docs.braindrive.ai) - Learn how to use, modify,and build on your BrainDrive.
+* [BrainDrive Community](https://community.braindrive.ai) - Get support and collaborate with us in building the future of the user-owned AI movement. 
